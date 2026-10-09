@@ -1,0 +1,52 @@
+# Copyright (c) 2026 Eoin Jordan
+# SPDX-License-Identifier: Apache-2.0
+
+source "Kconfig.zephyr"
+
+menu "ExecuTorch Arduino UNO Q anomaly sample"
+
+config EXECUTORCH_METHOD_ALLOCATOR_POOL_SIZE
+	int "Method allocator pool size in bytes"
+	default 65536
+	depends on EXECUTORCH
+
+config EXECUTORCH_TEMP_ALLOCATOR_POOL_SIZE
+	int "Temporary allocator pool size in bytes"
+	default 8192
+	depends on EXECUTORCH
+
+config APP_SIM_SENSOR
+	bool "Simulate the temperature sensor instead of reading A0"
+	default y
+	help
+	  Generates a normal heater cycle in software and injects a spike
+	  every 30 s so the Linux side sees both classes. Set to n once a
+	  sensor is wired to A0.
+
+config APP_SAMPLE_PERIOD_MS
+	int "Sensor sample period in milliseconds"
+	default 100
+	help
+	  Must match SAMPLE_HZ in train/model.py (10 Hz).
+
+config APP_INFER_PERIOD_MS
+	int "Inference period in milliseconds"
+	default 500
+
+config APP_MV_PER_DEGREE
+	int "Sensor scale: millivolts per degree C (x10)"
+	default 100
+	help
+	  Tenths of a millivolt per degree. Default 100 = 10.0 mV/C (TMP36).
+
+config APP_MV_OFFSET
+	int "Sensor offset: millivolts at 0 C"
+	default 500
+	help
+	  TMP36 outputs 500 mV at 0 C.
+
+config APP_ANOMALY_THRESHOLD_PERCENT
+	int "Anomaly probability (percent) that lights the red LED"
+	default 80
+
+endmenu

@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  train-export:
+    name: Train and export (host)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install executorch==1.5.1 --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Train and export
+        run: python train/train_anomaly.py
+      - name: Run the .pte on the host runtime
+        run: python train/run_pte_host.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: |
+            firmware/model/anomaly_net.pte
+            firmware/src/test_input.h
+      - name: Commit model back to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name eoinjordan
+          git config user.email 11853924+eoinjordan@users.noreply.github.com
+          git add firmware/model/anomaly_net.pte firmware/src/test_input.h
+          git diff --cached --quiet || (git commit -m "model: regenerate from CI" && git push)
+
+  firmware:
+    name: Build firmware (arduino_uno_q/stm32u585xx${{ matrix.extra }})
+    needs: train-export
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - extra: ""
+          - extra: " -DCONFIG_APP_SIM_SENSOR=n"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: executorch-zephyr-arduino-uno-q
+      - uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: executorch-zephyr-arduino-uno-q/firmware
+      - name: Check generated files landed
+        run: ls -l executorch-zephyr-arduino-uno-q/firmware/model/anomaly_net.pte executorch-zephyr-arduino-uno-q/firmware/src/test_input.h
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Zephyr host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends git cmake ninja-build gperf ccache \
+            dfu-util device-tree-compiler wget xz-utils file make gcc libsdl2-dev libmagic1
+      - name: Python dependencies (west + ExecuTorch codegen)
+        run: pip install -r executorch-zephyr-arduino-uno-q/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: West workspace
+        run: |
+          west init -l executorch-zephyr-arduino-uno-q
+          west update --narrow -o=--depth=1
+          west packages pip --install --ignore-venv-check
+      - name: Zephyr SDK (Arm toolchain only)
+        run: west sdk install --toolchains arm-zephyr-eabi
+      - name: Build
+        run: west build -p always -b arduino_uno_q/stm32u585xx executorch-zephyr-arduino-uno-q/firmware --${{ matrix.extra }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ strategy.job-index }}
+          path: |
+            build/zephyr/zephyr.bin
+            build/zephyr/zephyr.elf
+            build/zephyr/zephyr.map

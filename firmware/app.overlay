@@ -1,0 +1,12 @@
+/* Copyright (c) 2026 Eoin Jordan
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * A0 on the UNO Q header is PA4 = ADC1 channel 9 (14-bit, 3.3 V reference).
+ * Expose it to the application as io-channels index 0.
+ */
+
+/ {
+	zephyr,user {
+		io-channels = <&adc1 9>;
+	};
+};
