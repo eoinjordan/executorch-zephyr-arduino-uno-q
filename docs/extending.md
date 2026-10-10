@@ -167,6 +167,105 @@ void i2c_scan(void)
 The Qwiic bus also appears on the JMISC connector pins PF14/PF15 (same I2C4, alternate
 pinctrl); see `arduino_uno_q-common.dtsi` in Zephyr if you need that routing instead.
 
+## Air quality: Grove Multichannel Gas v2, a PM2.5 sensor and a microphone
+
+Pin map for the home air-quality build (the wake-word version lives in its own repo,
+`unoq-echoglow-air-monitor`). Everything below is 3.3 V logic; the only 5 V in play is the
+supply for the particulate sensor.
+
+### Seeed Grove Multichannel Gas Sensor v2 (I2C, address 0x08)
+
+| Grove pin | Wire colour | UNO Q | STM32 pin |
+|---|---|---|---|
+| 1 SCL | yellow | Qwiic SCL (or header SCL by AREF) | PD12 (I2C4) or PB10 (I2C2) |
+| 2 SDA | white | Qwiic SDA (or header SDA) | PD13 (I2C4) or PB11 (I2C2) |
+| 3 VCC | red | 3V3 | |
+| 4 GND | black | GND | |
+
+The easiest cable is a Grove-to-Qwiic (JST SH 1.0 mm) adapter straight into the Qwiic
+connector, which is I2C4. The module runs its four sensor heaters from a 3.3 V supply fine; the
+Seeed page quotes an output range of 3.3 to 5 V and the examples pair it with 3.3 V boards.
+Budget around 100 mA for the heaters. The module needs a preheat before the readings mean
+anything: minutes for a stable baseline, and Seeed quotes up to 48 h for a fresh GM-302B.
+
+Protocol, from Seeed's Arduino library: write one command byte, then read four bytes
+little-endian. The result is the module's 10-bit ADC count (0 to 1023 over 3.3 V):
+
+| Command | Element | Gas |
+|---|---|---|
+| `0x01` | GM-102B | NO2 |
+| `0x03` | GM-302B | ethanol (C2H5OH) |
+| `0x05` | GM-502B | VOC |
+| `0x07` | GM-702B | CO |
+| `0xFE` | | heaters on (warm up), send once at boot |
+| `0xFF` | | heaters off |
+| `0x55` + new address | | change the I2C address |
+
+```c
+static const struct device *const bus = DEVICE_DT_GET(DT_NODELABEL(i2c4));
+
+static int gas_read(uint8_t cmd, uint32_t *count)
+{
+	uint8_t buf[4];
+	int ret = i2c_write(bus, &cmd, 1, 0x08);
+	if (ret == 0) {
+		ret = i2c_read(bus, buf, sizeof(buf), 0x08);
+	}
+	*count = sys_get_le32(buf);
+	return ret;
+}
+```
+
+The counts are qualitative (Seeed says so); for anomaly detection that is fine, the model
+learns the house's normal baseline and flags departures. Feed the four channels as four
+features, or just VOC and CO.
+
+### PM2.5 sensor (laser scattering, UART)
+
+Most hobby particulate sensors (Plantower PMS5003/PMSA003, Nova SDS011, Seeed's Grove HM3301
+is the I2C exception) are the same deal: **5 V supply, 3.3 V logic UART at 9600 8N1**, one
+32-byte frame per second. The UNO Q header UART is free in this example because the console
+moved to the internal link.
+
+| Sensor pin | UNO Q | STM32 pin |
+|---|---|---|
+| VCC (5 V) | 5V on the power header | |
+| GND | GND | |
+| TX (3.3 V logic) | D0 (RX) | PB7 (USART1 RX) |
+| RX | D1 (TX), optional, only for sleep/wake commands | PB6 (USART1 TX) |
+
+The sensor's fan needs the 5 V rail (up to about 100 mA on a PMS5003); its TX is 3.3 V so it
+goes straight into D0. Never connect a 5 V-logic sensor's TX to the header. Devicetree:
+
+```dts
+&usart1 {
+	status = "okay";
+	current-speed = <9600>;
+};
+```
+
+Plantower frames start `0x42 0x4D`, then a big-endian length (28), thirteen big-endian
+16-bit values and a 16-bit checksum (sum of every byte before it). PM1.0/2.5/10 under
+atmospheric conditions are values 4, 5 and 6. If your part is an SDS011 the frame is 10 bytes
+starting `0xAA 0xC0` with PM2.5 and PM10 as little-endian tenths of a microgram.
+
+### Microphone
+
+The STM32U585 has an audio block (ADF/MDF for PDM mics) and SAI for I2S mics, but Zephyr
+v4.4.0's STM32U5 devicetree does not expose either, so there is no driver to turn on. Three
+routes, in order of effort:
+
+1. **Analog electret (MAX9814 or MAX4466 breakout) on A1.** Out to A1 (PA5, ADC1 channel 10),
+   VCC to 3V3, GND to GND. Sample at 16 kHz from a timer and run the wake-word model on the
+   MCU with ExecuTorch. Works with what the example already uses (the ADC).
+2. **I2S MEMS mic (INMP441, ICS-43434) on SAI1 block B.** SCK to D2 (PB3), WS to D1 (PB6), SD
+   to D8 is not available, so use PB5 (ICSP MOSI / D11 alt) or move to block A: SCK on the
+   header SCL pin (PB10), WS on D10 (PB9), SD on A4 (PC1). Needs an `st,stm32-sai` node added
+   by hand in the overlay plus DMA; Zephyr has the driver, the SoC file just lacks the node.
+3. **PDM mic, or the Linux side.** A PDM mic wants the ADF, which has no Zephyr driver yet.
+   Put the mic on the QRB2210 instead (a USB mic, or an I2S mic on JMEDIA at 1.8 V) and run
+   the wake word there with ExecuTorch on aarch64; the MCU keeps the sensors and the alarms.
+
 ## The LED matrix
 
 `firmware/src/matrix.c` draws through Zephyr's display API, so any other feedback (a scrolling
