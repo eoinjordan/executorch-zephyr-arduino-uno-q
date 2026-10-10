@@ -100,6 +100,17 @@ add_custom_command(
 add_custom_target(gen_model_header DEPENDS ${_model_pte_header})
 add_dependencies(app gen_model_header)
 
+# The ExecuTorch module's runtime includes <zephyr/kernel.h>, which needs
+# Zephyr's generated headers. Order it explicitly so a parallel build does not
+# compile it before they exist.
+if(TARGET zephyr_generated_headers)
+  foreach(_t executorch_core executorch portable_kernels kernels_util_all_deps cortex_m_kernels)
+    if(TARGET ${_t})
+      add_dependencies(${_t} zephyr_generated_headers)
+    endif()
+  endforeach()
+endif()
+
 target_sources(app PRIVATE src/main.cpp src/sensor.c)
 
 target_compile_definitions(

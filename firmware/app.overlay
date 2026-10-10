@@ -10,3 +10,15 @@
 		io-channels = <&adc1 9>;
 	};
 };
+
+/* The board file puts the console on USART1, which is the header serial
+ * (D0/D1). The UART that links the STM32 to the QRB2210 is LPUART1
+ * (/dev/ttyHS1 on the Linux side), so send the console and the JSON stream
+ * there instead.
+ */
+/ {
+	chosen {
+		zephyr,console = &lpuart1;
+		zephyr,shell-uart = &lpuart1;
+	};
+};

@@ -12,9 +12,12 @@ This script prints a one-line status, appends a CSV log, and calls `on_alarm`
 on the rising edge of `anomaly`. Replace `on_alarm` with whatever the Linux
 side should do: MQTT, a notification, a database write, a camera snapshot.
 
-Usage:
+Usage, on the board (the STM32 UART is /dev/ttyHS1; stop arduino-router first):
   pip install pyserial
-  python3 anomaly_bridge.py --port /dev/ttyXXX --log anomalies.csv
+  python3 anomaly_bridge.py --port /dev/ttyHS1 --log anomalies.csv
+
+Usage, from a PC over adb (no pyserial needed, --port - reads stdin):
+  adb exec-out cat /dev/ttyHS1 | python3 anomaly_bridge.py --port - --log anomalies.csv
 """
 
 import argparse
@@ -23,8 +26,6 @@ import json
 import sys
 import time
 
-import serial
-
 
 def on_alarm(event: dict) -> None:
     print(f"*** ALARM at seq {event['seq']}: temp {event['temp_c']} C, p={event['p_anomaly']}")
@@ -32,19 +33,30 @@ def on_alarm(event: dict) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--port", required=True, help="serial device connected to the STM32 console")
+    p.add_argument("--port", required=True, help="serial device connected to the STM32 console, or - for stdin")
     p.add_argument("--baud", type=int, default=115200)
     p.add_argument("--log", default="anomaly_log.csv")
     args = p.parse_args()
 
-    ser = serial.Serial(args.port, args.baud, timeout=5)
+    if args.port == "-":
+        readline = sys.stdin.buffer.readline
+    else:
+        import serial  # pip install pyserial
+
+        ser = serial.Serial(args.port, args.baud, timeout=5)
+        readline = ser.readline
     last = 0
     with open(args.log, "a", newline="") as f:
         w = csv.writer(f)
         if f.tell() == 0:
             w.writerow(["host_time", "seq", "t_ms", "temp_c", "p_anomaly", "anomaly", "sensor_ok", "infer_us"])
         while True:
-            line = ser.readline().decode(errors="replace").strip()
+            raw = readline()
+            if not raw:
+                if args.port == "-":
+                    break
+                continue
+            line = raw.decode(errors="replace").strip()
             if not line.startswith("{"):
                 if line:
                     print(f"[mcu] {line}")
