@@ -15,11 +15,13 @@ the real-time loop and the decision, and the Linux side does the things a Linux 
 ```
             STM32U585 (Zephyr)                              QRB2210 (Debian)
  A0 ──ADC──▶ 32-sample window ──ExecuTorch──▶ p(anomaly) ──LPUART1 JSON──▶ linux/anomaly_bridge.py
-                                            └─▶ RGB LED 3 green/red                   └─▶ CSV log, on_alarm()
+                                            ├─▶ RGB LED 3 green/red                   └─▶ CSV log, on_alarm()
+                                            └─▶ 13x8 LED matrix: rolling p(anomaly) chart
 ```
 
-The MCU samples at 10 Hz, runs the model every 500 ms in tens of microseconds, drives the LED and
-prints one JSON object per inference. If the Linux side is asleep, rebooting or busy, the loop
+The MCU samples at 10 Hz, runs the model every 500 ms in tens of microseconds, drives the RGB
+LED, draws a rolling probability chart on the 13x8 LED matrix and prints one JSON object per
+inference. If the Linux side is asleep, rebooting or busy, the loop
 does not care.
 
 ## In pictures
@@ -44,7 +46,9 @@ inference), read on the Linux side:
 | Export to `.pte` | `train/train_anomaly.py` | `to_edge_transform_and_lower`, portable fp32 ops (`addmm`, `relu`) |
 | Host check | `train/run_pte_host.py` | runs the `.pte` with the ExecuTorch Python runtime |
 | MCU firmware | `firmware/` | Zephyr app for `arduino_uno_q/stm32u585xx`, ADC or simulated sensor |
+| LED matrix | `firmware/src/matrix.c`, `firmware/drivers/` | rolling p(anomaly) chart on the 13x8 charlieplexed matrix; driver vendored from Zephyr main |
 | Flash helper | `firmware/scripts/flash_unoq.py` | adb + the board's OpenOCD + gdb, since `west flash` is not wired up |
+| Extending | `docs/extending.md` | analog sensors on A0 to A5, Modulino nodes on the Qwiic connector |
 | Linux brain | `linux/anomaly_bridge.py` | parses the JSON stream, logs CSV, fires `on_alarm()` |
 | Manifest | `west.yml` | Zephyr v4.4.0 (+ `hal_stm32`, CMSIS) and ExecuTorch v1.5.1 as a module |
 | CI | `.github/workflows/build.yml` | trains, exports, checks on host, builds both firmware variants |
@@ -60,6 +64,9 @@ and commits only if they changed.
   `CONFIG_APP_SIM_SENSOR=y` (default): the firmware simulates a heater loop and injects a spike
   every 30 s so both classes show up.
 - USB-C to the host for `adb`. The Linux side bridges SWD to the STM32, so no debug probe.
+- The 13x8 LED matrix shows the last 13 inferences as a bar chart: column height is p(anomaly),
+  dim is normal, bright is an anomaly, dotted means the sensor read out of range. A tick after
+  the self-test passes, a cross if it fails. `CONFIG_APP_LED_MATRIX=n` turns it off.
 
 ## Quick start
 
@@ -158,8 +165,8 @@ ANOMALY  temp= 70.12 C  p=0.994  41 us
 1. **Export is faithful.** `python train/run_pte_host.py` asserts the `.pte` reproduces the PyTorch
    logits for the embedded windows within 1e-3.
 2. **Firmware builds.** CI builds the simulated and ADC variants for `arduino_uno_q/stm32u585xx`.
-3. **Device agrees with the host.** The console shows `SELF-TEST PASS`: the M33 reproduces the
-   PyTorch logits for both embedded windows.
+3. **Device agrees with the host.** The console shows `SELF-TEST PASS` and the LED matrix shows
+   a tick: the M33 reproduces the PyTorch logits for both embedded windows.
 4. **Linux brain receives.** `anomaly_bridge.py` prints `ANOMALY` and `*** ALARM` once every 30 s
    in simulated mode and `anomalies.csv` grows.
 
@@ -183,6 +190,10 @@ re-implementing policy. `p_anomaly` is there for dashboards and tuning.
   so an int8 export drops in later.
 - The board file puts the console on USART1, which is the header serial (D0/D1).
   `firmware/app.overlay` moves it to LPUART1 so the JSON reaches the Linux side.
+- The `charlieplex-led-matrix` display driver landed in Zephyr after v4.4.0, so it is vendored
+  under `firmware/drivers/` with its binding in `firmware/dts/`. The devicetree node in
+  `app.overlay` is the upstream one (PF0 to PF10, TIM17 as the scan clock, 3-bit grayscale).
+  Delete both directories once the manifest moves to a release that has the driver.
 - `firmware/CMakeLists.txt` orders the ExecuTorch runtime after Zephyr's generated headers;
   without that a parallel build can race and fail on `zephyr/heap_constants.h`.
 - Windows host: `west sdk install` needs 7-Zip on `PATH`, and pass
@@ -191,6 +202,9 @@ re-implementing policy. `p_anomaly` is there for dashboards and tuning.
 
 ## Going further
 
+- **Other sensors**: [docs/extending.md](docs/extending.md) walks through analog inputs on A0 to
+  A5 and Modulino nodes on the Qwiic connector (I2C4), with overlay snippets and the two places
+  in the code that change.
 - **Quantise** with PT2E int8 and the Cortex-M partitioner.
 - **Replace the UART with SPI** to the QRB2210 for higher-rate telemetry.
 - **Do something on Linux**: swap `on_alarm()` for an MQTT publish or a camera snapshot.

@@ -50,3 +50,15 @@ config APP_ANOMALY_THRESHOLD_PERCENT
 	default 80
 
 endmenu
+
+config APP_LED_MATRIX
+	bool "Show the anomaly probability on the 13x8 LED matrix"
+	default y
+	select GPIO
+	select COUNTER
+	select DISPLAY
+	help
+	  Rolling bar chart on the UNO Q's charlieplexed LED matrix: one column
+	  per inference, height = p(anomaly), bright when the MCU flagged an
+	  anomaly, dotted when the sensor reads out of range. The matrix driver
+	  lives in firmware/drivers/ and is wired up in app.overlay.

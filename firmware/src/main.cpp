@@ -31,6 +31,7 @@
 
 #include "model_pte.h"
 #include "sensor.h"
+#include "matrix.h"
 #include "test_input.h"
 
 using executorch::aten::Tensor;
@@ -212,6 +213,10 @@ int main(void)
 		gpio_pin_configure_dt(&led_red, GPIO_OUTPUT_INACTIVE);
 	}
 
+	if (matrix_init() == 0) {
+		printk("matrix: 13x8 LED matrix on PF0..PF10, rolling p(anomaly) chart\n");
+	}
+
 	static Runner runner;
 	if (runner.init() != Error::Ok) {
 		printk("FAIL: runtime init\n");
@@ -222,6 +227,7 @@ int main(void)
 	bool ok = self_test(runner, "normal ", kTestNormal, kTestNormalLogits, 0);
 	ok &= self_test(runner, "anomaly", kTestAnomaly, kTestAnomalyLogits, 1);
 	printk(ok ? "SELF-TEST PASS\n" : "SELF-TEST FAIL\n");
+	matrix_show_selftest(ok);
 
 	if (sensor_init() != 0) {
 		printk("FAIL: sensor init\n");
@@ -254,6 +260,7 @@ int main(void)
 				bool anomaly = p >= kThreshold || !in_range;
 				gpio_pin_set_dt(&led_green, !anomaly);
 				gpio_pin_set_dt(&led_red, anomaly);
+				matrix_push(p, anomaly, in_range);
 				/* One JSON object per line: the contract with the Linux side. */
 				printk("{\"seq\":%u,\"t_ms\":%lld,\"temp_c\":%.2f,\"p_anomaly\":%.3f,"
 				       "\"anomaly\":%d,\"sensor_ok\":%d,\"infer_us\":%u}\n",

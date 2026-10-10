@@ -25,6 +25,9 @@ if(NOT EXISTS "${ET_PTE_FILE_PATH}")
                       "Run train/train_anomaly.py first or pass -DET_PTE_FILE_PATH=<file>.")
 endif()
 
+# Bindings for the vendored LED matrix driver (dts/bindings/).
+list(APPEND DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(executorch_arduino_uno_q)
 
@@ -112,6 +115,10 @@ if(TARGET zephyr_generated_headers)
 endif()
 
 target_sources(app PRIVATE src/main.cpp src/sensor.c)
+
+if(CONFIG_APP_LED_MATRIX)
+  target_sources(app PRIVATE src/matrix.c drivers/display_charlieplex_led_matrix.c)
+endif()
 
 target_compile_definitions(
   app PRIVATE
