@@ -148,11 +148,6 @@ are registered so an int8 export drops in later.
 - **Quantise** with PT2E int8 and the Cortex-M partitioner.
 - **Replace the UART with SPI** to the QRB2210 for higher-rate telemetry.
 - **Do something on Linux**: swap `on_alarm()` for an MQTT publish or a camera snapshot.
-- **Upstream**: `firmware/` is laid out to drop into `zephyr/samples/`; see `docs/upstream-pr.md`.
-
-## Documentation
-
-- [docs/upstream-pr.md](docs/upstream-pr.md): plan and checklist for contributing this as a sample to pytorch/executorch.
 
 ## License
 
