@@ -7,6 +7,8 @@ and hands the verdicts to the Linux side as JSON lines over the internal UART.
 
 ![Arduino UNO Q at a glance](docs/images/board.png)
 
+*Board overview source: [docs/diagrams/board.drawio](docs/diagrams/board.drawio), editable in draw.io.*
+
 It is the follow-on to my Edge Impulse post
 [AI for Industrial Control Systems: Bringing Edge AI to PLCs](https://www.edgeimpulse.com/blog/transform-industrial-control-systems-with-ai-anomaly-detection-made-easy/),
 where an anomaly detector on an Arduino Opta watched a temperature loop and could trip a machine
@@ -14,12 +16,9 @@ in under 20 ms. Same shape of problem here, but the split is explicit: the micro
 the real-time loop and the decision, and the Linux side does the things a Linux box is good at
 (logging, MQTT, dashboards, cameras, cloud) without ever being in the control path.
 
-```
-            STM32U585 (Zephyr)                              QRB2210 (Debian)
- A0 ──ADC──▶ 32-sample window ──ExecuTorch──▶ p(anomaly) ──LPUART1 JSON──▶ linux/anomaly_bridge.py
-                                            ├─▶ RGB LED 3 green/red                   └─▶ CSV log, on_alarm()
-                                            └─▶ 13x8 LED matrix: rolling p(anomaly) chart
-```
+![overview](docs/images/overview.png)
+
+*Diagram source: [docs/diagrams/overview.drawio](docs/diagrams/overview.drawio), editable in [draw.io](https://www.drawio.com/); re-export to `docs/images/overview.png`.*
 
 The MCU samples at 10 Hz, runs the model every 500 ms in tens of microseconds, drives the RGB
 LED, draws a rolling probability chart on the 13x8 LED matrix and prints one JSON object per
