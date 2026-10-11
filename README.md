@@ -215,7 +215,8 @@ re-implementing policy. `p_anomaly` is there for dashboards and tuning.
 
 - [AI for Industrial Control Systems: Bringing Edge AI to PLCs](https://www.edgeimpulse.com/blog/transform-industrial-control-systems-with-ai-anomaly-detection-made-easy/),
   the Opta write-up this example grew out of.
-- My Elektor article on edge AI anomaly detection for industrial control. <!-- TODO: add link -->
+- [The Edge Impulse guest edition of Elektor (Elektor 469)](https://www.elektormagazine.com/elektor-edge-impulse),
+  which carries my article on edge AI anomaly detection for industrial control.
 - [Zephyr: Arduino UNO Q board page](https://docs.zephyrproject.org/latest/boards/arduino/uno_q/doc/index.html)
 - [ExecuTorch as a Zephyr module](https://docs.zephyrproject.org/latest/develop/manifest/external/executorch.html)
 
