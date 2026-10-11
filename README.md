@@ -5,6 +5,8 @@ running Debian. This repo puts a tiny PyTorch anomaly classifier on the STM32 un
 with the [ExecuTorch Zephyr module](https://docs.zephyrproject.org/latest/develop/manifest/external/executorch.html),
 and hands the verdicts to the Linux side as JSON lines over the internal UART.
 
+![Arduino UNO Q at a glance](docs/images/board.png)
+
 It is the follow-on to my Edge Impulse post
 [AI for Industrial Control Systems: Bringing Edge AI to PLCs](https://www.edgeimpulse.com/blog/transform-industrial-control-systems-with-ai-anomaly-detection-made-easy/),
 where an anomaly detector on an Arduino Opta watched a temperature loop and could trip a machine
@@ -129,7 +131,7 @@ Linux side that is `/dev/ttyHS1`. The stock `arduino-router` service holds that 
 Arduino App Lab bridge firmware, so stop it first (and start it again when you want App Lab back):
 
 ```bash
-adb shell sudo systemctl stop arduino-router arduino-router-serial
+adb shell sudo systemctl stop arduino-router-serial.path arduino-router-serial arduino-router
 ```
 
 Then either run the bridge on the board:
